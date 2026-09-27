@@ -57,49 +57,6 @@ def _create_api_test_firms(session: Session) -> None:
     session.flush()
 
 
-def test_sample_request_returns_created_payments_and_updates_balances(api_context):
-    client, session = api_context
-    _create_api_test_firms(session)
-
-    response = client.post(
-        "/api/v1/bulk-payments",
-        json={
-            "payer_firm_uuid": PINECREST,
-            "payments": [
-                {
-                    "payee_firm_uuid": NAIR,
-                    "amount": "6250",
-                    "description": "Overflow returns, August 2026",
-                },
-                {
-                    "payee_firm_uuid": NAIR,
-                    "amount": "5800.5",
-                    "description": "Amended returns, August 2026",
-                },
-                {
-                    "payee_firm_uuid": LOPEZ,
-                    "amount": "1200.75",
-                    "description": "Bookkeeping cleanup, 3 clients",
-                },
-            ],
-        },
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["payer_firm_uuid"] == PINECREST
-    assert len(body["payments"]) == 3
-    assert len({payment["id"] for payment in body["payments"]}) == 3
-    assert [payment["amount"] for payment in body["payments"]] == [
-        "6250.00",
-        "5800.50",
-        "1200.75",
-    ]
-    firms = {firm.uuid: firm.balance_cents for firm in session.scalars(select(Firm))}
-    assert firms == {PINECREST: 3_674_875, LOPEZ: 170_075, NAIR: 1_405_050}
-    assert session.scalar(select(func.count()).select_from(Payment)) == 3
-
-
 def test_insufficient_funds_returns_typed_422_and_keeps_database_unchanged(api_context):
     client, session = api_context
     _create_api_test_firms(session)

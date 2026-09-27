@@ -60,6 +60,22 @@ def test_exact_available_balance_succeeds(payment_session):
     assert payee.balance_cents == 520
 
 
+def test_stored_uppercase_firm_uuids_can_be_paid(payment_session):
+    payer, payee = _add_firms(payment_session, (500, "payer"), (20, "payee"))
+    payer.uuid = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+    payee.uuid = "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB"
+    payment_session.commit()
+
+    result = process_bulk_payments(
+        payment_session, _request(payer, (payee, "1.25", "case-insensitive lookup"))
+    )
+
+    assert str(result.payer_firm_uuid) == payer.uuid.lower()
+    assert str(result.payments[0].payee_firm_uuid) == payee.uuid.lower()
+    assert (payer.balance_cents, payee.balance_cents) == (375, 145)
+    assert payment_session.scalar(select(func.count()).select_from(Payment)) == 1
+
+
 def test_locked_firm_refreshes_balance_already_loaded_in_session(payment_session, test_schema):
     payer, first_payee, second_payee = _add_firms(
         payment_session, (100, "payer"), (0, "first payee"), (0, "second payee")

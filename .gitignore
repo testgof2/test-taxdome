@@ -8,3 +8,4 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+IMPLEMENTATION_PLAN.md

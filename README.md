@@ -41,18 +41,18 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/bulk-payments -
 
 The response is `201 Created` with the payer UUID and three payment objects. Each object contains a generated integer `id`, the payee UUID, its description, and a two-decimal amount (`6250.00`, `5800.50`, or `1200.75`). On a fresh database, the resulting balances are Pinecrest `$36,748.75`, Lopez `$1,700.75`, and Nair `$14,050.50`. Sending the request again makes another payment batch, so use a fresh database when checking those balances.
 
-Run the test suite with `pytest`. It uses PostgreSQL and creates temporary tables in isolated schemas in `taxdome_test`; it does not modify the development database. The focused tests cover exact cent parsing, atomic transfers and rollback, the HTTP contract, and concurrent requests. To stop PostgreSQL without deleting data, run `docker compose down`. `docker compose down -v` permanently removes the local volume.
+Run the test suite with `pytest`. It uses PostgreSQL and creates isolated schemas in `taxdome_test`; the end-to-end test also creates and drops a temporary database. The test database role needs `CREATEDB` permission. Tests do not modify the development database. The focused tests cover exact cent parsing, atomic transfers and rollback, the HTTP contract, and concurrent requests. To stop PostgreSQL without deleting data, run `docker compose down`. `docker compose down -v` permanently removes the local volume.
 
 ## Design and review notes
 
 - SQLAlchemy stores amounts and balances as integer cents. Request amounts must be positive decimal **strings** that represent exact cents. Extra trailing zeros are allowed (`"1.2300"`); fractional cents are rejected (`"1.235"`). The service never rounds money.
 - One SQLAlchemy transaction locks every participating firm in ascending database ID order. It checks the payer's current balance, validates recipients and integer ranges, then writes all balances and payment rows together. The database locks coordinate requests across server instances and avoid opposing-transfer deadlocks.
-- Duplicate recipients are allowed and receive a combined credit, with one payment row per request entry. Empty batches, unknown firms, self-payments, invalid amounts, and insufficient funds return `422` with a typed `detail` list containing `code`, `message`, and `field`.
+- Firm UUID lookup and database uniqueness are case-insensitive. Existing firms whose UUIDs differ only by case must be reconciled before applying migration `0002`. Duplicate recipients are allowed and receive a combined credit, with one payment row per request entry. Empty batches, unknown firms, self-payments, invalid amounts, and insufficient funds return `422` with a typed `detail` list containing `code`, `message`, and `field`.
 - Concurrency tests needed reliable overlap: each worker uses its own PostgreSQL connection and waits behind a held row lock before both requests proceed. Test data lives in isolated schemas in the separate test database.
 - The assignment's sample payload uses multiple payments to Nair. This is why the service sums recipient credits but still records each payment separately.
 - This version has no authentication or idempotency key. Identical submissions create separate payments. For a production service, add authorization and an idempotency key so clients can safely retry after a lost response.
 
-The implementation was developed with Codex for planning, coding, test review, and documentation. The required unedited conversation log should be supplied separately with the eventual submission; it is not included in this repository. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged plan and the repository history for the implementation sequence.
+The implementation was developed with Codex for planning, coding, test review, and documentation. [AI_DIALOGUE.docx](AI_DIALOGUE.docx) contains the verbatim user-visible dialogue exported from this task, with timestamps and message roles. Refresh it before submission if the conversation continues. The repository history shows the implementation sequence.
 
 ## Assignment questions
 

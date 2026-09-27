@@ -1,6 +1,6 @@
 """Atomic bulk payment processing."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from taxdome.models import Firm, Payment
@@ -39,12 +39,12 @@ def process_bulk_payments(
 
         firms = session.scalars(
             select(Firm)
-            .where(Firm.uuid.in_(requested_uuids))
+            .where(func.lower(Firm.uuid).in_(requested_uuids))
             .order_by(Firm.id)
             .with_for_update()
             .execution_options(populate_existing=True)
         ).all()
-        firms_by_uuid = {firm.uuid: firm for firm in firms}
+        firms_by_uuid = {firm.uuid.lower(): firm for firm in firms}
 
         payer = firms_by_uuid.get(payer_uuid)
         if payer is None:

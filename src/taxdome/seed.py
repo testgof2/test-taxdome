@@ -33,7 +33,7 @@ def seed_sample_firms(session: Session) -> int:
     statement = (
         insert(Firm)
         .values(list(SAMPLE_FIRMS))
-        .on_conflict_do_nothing(index_elements=[Firm.uuid])
+        .on_conflict_do_nothing()
         .returning(Firm.id)
     )
     result = session.execute(statement)
