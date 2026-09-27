@@ -56,5 +56,5 @@ The implementation was developed with Codex for planning, coding, test review, a
 
 ## Assignment questions
 
-- Time spent: **Awaiting the author's answer.**
-- Pride in the work: **Awaiting the author's answer.**
+- Time spent: **3 hours.**
+- Pride in the work: **Good enough.**
