@@ -32,21 +32,24 @@ Endpoint: `POST /api/v1/bulk-payments`.
 | ErrorResponse | detail: list[ErrorDetail] |
 | ErrorDetail | code: str; message: str; field: str or None |
 
-Dollar amounts arrive as positive strings. Store and calculate transfers in
-integer cents; format response amounts with two decimal places.
+Dollar amounts arrive as positive strings. Accept more than two decimal places
+only when the value is an exact whole number of cents (for example, `1.2300`
+becomes 123 cents; `1.235` is rejected). Do not round or truncate. Store and
+calculate transfers in integer cents; format response amounts with two decimal
+places. A single payment must fit PostgreSQL's positive `INTEGER` cents range.
 
-**User amendment:** accept more than two decimal places. This overrides the
-PDF's input precision restriction. The fractional-cent policy is still pending:
-proposed rounding is each payment to the nearest cent, with halves rounded up
-(1.235 becomes 1.24), rejecting payments that round to zero. Confirm this before
-Task 3; do not silently implement the proposal as an agreed requirement.
+**User amendment:** accept more than two decimal places only when the amount
+still represents an exact number of cents. Reject fractional cents rather than
+rounding or truncating them.
 
 Other proposed assumptions from the approved plan:
 
 - Empty payment lists, unknown firms, and self-payments return 422.
 - Duplicate recipients are allowed, with one payment record per input entry.
 - Amounts must be positive strings; reject numeric JSON values, exponent notation,
-  whitespace, and non-finite values. Do not reject solely for extra decimal places.
+  whitespace, non-finite values, fractional cents, and amounts above
+  2,147,483,647 cents. Extra decimal places are valid when they are trailing
+  zeros that preserve an exact cent value.
 - Description is a required string; an empty string is allowed.
 - Reject unknown request fields.
 - Preserve the specified PostgreSQL INTEGER columns and reject amounts or
@@ -98,9 +101,10 @@ Other proposed assumptions from the approved plan:
 
 ### Test plan
 
-- Parametrize valid amounts, including 300, 5800.5, 1200.75, 0.01, and strings
-  with more than two decimal places.
-- Verify exact cent conversion according to the agreed fractional-cent policy.
+- Parametrize valid amounts, including 300, 5800.5, 1200.75, 0.01, and extra
+  decimal places that preserve an exact cent value, such as 1.2300.
+- Verify exact cent conversion, including rejection of fractional cents such as
+  1.235 and 0.001, with no rounding or truncation.
 - Cover zero, negative, non-finite, exponent notation, numeric JSON values,
   whitespace, and out-of-range amounts.
 - Cover invalid UUIDs, missing fields, nulls, incorrect types, unknown fields,
@@ -110,10 +114,9 @@ Other proposed assumptions from the approved plan:
 
 ### Implementation plan
 
-- Resolve the fractional-cent policy before implementing monetary validation.
 - Define all request, response, and error DTOs with explicit types.
-- Parse monetary strings without binary floating-point arithmetic and apply
-  the agreed conversion to cents before totaling payments.
+- Parse monetary strings with `Decimal` and convert exactly to cents without
+  binary floating-point arithmetic, rounding, or truncation.
 - Normalize UUIDs for database lookup.
 - Enforce structural validation; keep database-dependent checks in the service.
 
