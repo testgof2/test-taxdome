@@ -7,7 +7,7 @@ from taxdome.config import get_settings
 
 
 class Base(DeclarativeBase):
-    """Base class for SQLAlchemy models added by later tasks."""
+    """Base class shared by the database models."""
 
 
 engine = create_engine(get_settings().database_url, pool_pre_ping=True)

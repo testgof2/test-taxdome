@@ -1,6 +1,6 @@
 # TaxDome API
 
-This repository currently contains the project and database setup for a FastAPI service backed by PostgreSQL. The payment endpoint is planned for a later task. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+This repository contains the database foundation for a small FastAPI service backed by PostgreSQL. The payment endpoint is planned for a later task. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Local setup
 
@@ -33,6 +33,19 @@ This repository currently contains the project and database setup for a FastAPI 
    ```
 
    These tests require the Compose database to be healthy. To stop it while keeping data, run `docker compose down`. To reset local data, run `docker compose down -v` and start it again; this permanently deletes the local database volume.
+
+## Database schema and sample data
+
+Apply the Alembic migration to the database selected by `DATABASE_URL`, then seed the three sample firms:
+
+```powershell
+alembic upgrade head
+python -m taxdome.seed
+```
+
+The seed command inserts a sample firm only when its UUID is missing. Running it again leaves existing firm names and balances unchanged. Keep `DATABASE_URL` pointed at the development database for these commands. Tests use `TEST_DATABASE_URL` and a temporary schema, and do not migrate or clear the development database.
+
+Balances and payment amounts use integer cents. The database requires unique firm UUIDs, nonnegative firm balances, positive payment amounts, and existing payer and payee firms for every payment.
 
 ## Configuration
 
