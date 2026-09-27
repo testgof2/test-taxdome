@@ -36,14 +36,14 @@ This repository contains the database foundation for a small FastAPI service bac
 
 ## Database schema and sample data
 
-Apply the Alembic migration to the database selected by `DATABASE_URL`, then seed the three sample firms:
+Apply the Alembic migration explicitly to the database selected by `DATABASE_URL`, then seed the three sample firms:
 
 ```powershell
 alembic upgrade head
 python -m taxdome.seed
 ```
 
-The seed command inserts a sample firm only when its UUID is missing. Running it again leaves existing firm names and balances unchanged. Keep `DATABASE_URL` pointed at the development database for these commands. Tests use `TEST_DATABASE_URL` and a temporary schema, and do not migrate or clear the development database.
+The application does not run migrations automatically at startup. The seed command inserts a sample firm only when its UUID is missing. Running it again leaves existing firm names and balances unchanged. Keep `DATABASE_URL` pointed at the development database for these commands. Tests use `TEST_DATABASE_URL` and create ORM tables in a temporary schema; pytest does not invoke Alembic or clear the development database. The migration itself is not tested by the test suite.
 
 Balances and payment amounts use integer cents. The database requires unique firm UUIDs, nonnegative firm balances, positive payment amounts, and existing payer and payee firms for every payment.
 

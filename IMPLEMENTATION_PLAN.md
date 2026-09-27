@@ -80,7 +80,8 @@ Other proposed assumptions from the approved plan:
 
 ### Test plan
 
-- Apply the migration to an empty database.
+- Create model tables in an isolated schema in the test database; pytest does
+  not run Alembic.
 - Verify unique firm UUIDs and valid payment foreign keys.
 - Verify database rejection of negative balances and nonpositive payments.
 - Verify the three sample firms have the exact supplied UUIDs and balances.
@@ -197,8 +198,9 @@ Use separate PostgreSQL connections and application sessions:
 
 ### Test plan
 
-- Follow documented setup from an empty database.
-- Run migrations, seed data, start the API, and submit the sample request.
+- Follow documented setup from an empty database, running the migration
+  explicitly outside pytest.
+- Seed data, start the API, and submit the sample request.
 - Run the full pytest suite.
 - Verify README examples match the API and actual results.
 

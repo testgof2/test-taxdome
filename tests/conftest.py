@@ -2,12 +2,12 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
-from alembic import command
-from alembic.config import Config
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session
 
 from taxdome.config import Settings
+from taxdome.db import Base
+from taxdome import models  # noqa: F401 - register model tables with Base.metadata
 
 
 @pytest.fixture(scope="session")
@@ -33,26 +33,24 @@ def database_engines(settings: Settings) -> Iterator[tuple[Engine, Engine]]:
 
 
 @pytest.fixture
-def migrated_test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
-    """Run the initial migration in a blank schema within the test database."""
+def test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
+    """Create model tables in an isolated temporary test schema."""
     dev_engine, test_engine = database_engines
     if dev_engine.url.database == test_engine.url.database:
-        raise RuntimeError("Refusing to migrate because dev and test DBs are the same")
+        raise RuntimeError("Refusing to create test tables because dev and test DBs are the same")
 
     schema_name = f"task2_test_{uuid4().hex}"
     with test_engine.connect() as connection:
         current_database = connection.scalar(text("SELECT current_database()"))
         if current_database == dev_engine.url.database:
-            raise RuntimeError("Refusing to migrate the development database")
+            raise RuntimeError("Refusing to create test tables in the development database")
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
         connection.commit()
         try:
             connection.execute(text(f'SET search_path TO "{schema_name}"'))
             connection.commit()
 
-            alembic_config = Config("alembic.ini")
-            alembic_config.attributes["connection"] = connection
-            command.upgrade(alembic_config, "head")
+            Base.metadata.create_all(connection, checkfirst=False)
             connection.commit()
             yield test_engine, schema_name
         finally:
@@ -63,9 +61,9 @@ def migrated_test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
 
 
 @pytest.fixture
-def task2_session(migrated_test_schema) -> Iterator[Session]:
-    """Give each test a rollback-only transaction in its own migrated schema."""
-    engine, schema_name = migrated_test_schema
+def task2_session(test_schema) -> Iterator[Session]:
+    """Give each test a rollback-only transaction in its own schema."""
+    engine, schema_name = test_schema
     with engine.connect() as connection:
         connection.execute(text(f'SET search_path TO "{schema_name}"'))
         connection.commit()

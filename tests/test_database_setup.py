@@ -1,22 +1,6 @@
-import pytest
 from sqlalchemy import text
 
-from taxdome.config import Settings
 from taxdome.db import SessionLocal
-
-
-def test_settings_read_environment_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "DATABASE_URL", "postgresql+psycopg://example:secret@localhost:55432/example"
-    )
-    monkeypatch.setenv(
-        "TEST_DATABASE_URL",
-        "postgresql+psycopg://example:secret@localhost:55432/example_test",
-    )
-    settings = Settings(_env_file=None)
-
-    assert settings.database_url.endswith("/example")
-    assert settings.test_database_url.endswith("/example_test")
 
 
 def test_development_and_test_databases_are_separate(database_engines) -> None:

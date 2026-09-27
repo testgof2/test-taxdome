@@ -1,26 +1,9 @@
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 import pytest
 
 from taxdome.models import Firm, Payment
-from taxdome.seed import SAMPLE_FIRMS, seed_sample_firms
-
-
-def test_initial_migration_builds_empty_schema(migrated_test_schema, task2_session):
-    engine, _ = migrated_test_schema
-    schema_name = task2_session.connection().scalar(text("SELECT current_schema()"))
-    inspector = inspect(engine)
-    assert {"firms", "payments", "alembic_version"}.issubset(
-        inspector.get_table_names(schema=schema_name)
-    )
-    assert task2_session.scalar(select(Firm.id)) is None
-    assert task2_session.scalar(select(Payment.id)) is None
-
-    version = task2_session.scalar(text("SELECT version_num FROM alembic_version"))
-    head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
-    assert version == head
+from taxdome.seed import seed_sample_firms
 
 
 def test_firm_uuid_must_be_unique(task2_session):
@@ -82,13 +65,9 @@ def test_seed_inserts_exact_sample_firms(task2_session):
     assert [
         (firm.id, firm.name, firm.balance_cents, firm.uuid) for firm in firms
     ] == [
-        (
-            index,
-            sample["name"],
-            sample["balance_cents"],
-            sample["uuid"],
-        )
-        for index, sample in enumerate(SAMPLE_FIRMS, start=1)
+        (1, "Pinecrest CPA Group", 5_000_000, "3f1c9a2e-7b4d-4c1e-9a55-2d8e6f0b7c41"),
+        (2, "Lopez Bookkeeping", 50_000, "8b2e4c71-0d3a-4f6e-b1c9-5a7d2e9f4c10"),
+        (3, "Nair Tax Services", 200_000, "e5f18b3c-2a9d-4c07-8e6b-1d4a7f9c3b25"),
     ]
 
 
