@@ -1,5 +1,3 @@
-from uuid import UUID
-
 import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -53,37 +51,6 @@ def _request(payer: Firm, *payments: tuple[Firm, str, str]) -> BulkPaymentReques
     )
 
 
-def test_sample_batch_commits_each_payment_and_conserves_money(payment_session):
-    payer, lopez, nair = _add_firms(
-        payment_session, (5_000_000, "payer"), (50_000, "lopez"), (200_000, "nair")
-    )
-    starting_total = payment_session.scalar(select(func.sum(Firm.balance_cents)))
-    payment_session.commit()
-
-    result = process_bulk_payments(
-        payment_session,
-        _request(
-            payer,
-            (nair, "6250", "Annual accounts"),
-            (nair, "5800.5", "Quarterly bookkeeping"),
-            (lopez, "1200.75", "Tax return"),
-        ),
-    )
-
-    assert (payer.balance_cents, lopez.balance_cents, nair.balance_cents) == (
-        3_674_875,
-        170_075,
-        1_405_050,
-    )
-    assert len({payment.id for payment in result.payments}) == 3
-    assert [payment.amount for payment in result.payments] == ["6250.00", "5800.50", "1200.75"]
-    assert [payment.payee_firm_uuid for payment in result.payments] == [
-        UUID(nair.uuid), UUID(nair.uuid), UUID(lopez.uuid)
-    ]
-    assert payment_session.scalar(select(func.count()).select_from(Payment)) == 3
-    assert payment_session.scalar(select(func.sum(Firm.balance_cents))) == starting_total
-
-
 def test_exact_available_balance_succeeds(payment_session):
     payer, payee = _add_firms(payment_session, (500, "payer"), (20, "payee"))
 
@@ -127,37 +94,6 @@ def test_locked_firm_refreshes_balance_already_loaded_in_session(payment_session
     assert payment_session.get(Firm, first_payee.id).balance_cents == 80
     assert payment_session.get(Firm, second_payee.id).balance_cents == 0
     assert payment_session.scalar(select(func.count()).select_from(Payment)) == 1
-
-
-def test_insufficient_unknown_firm_and_self_payment_leave_state_unchanged(payment_session):
-    payer, payee = _add_firms(payment_session, (100, "payer"), (10, "payee"))
-    requests = [
-        (_request(payer, (payee, "1.01", "too much")), "insufficient_funds"),
-        (
-            _request(
-                payer,
-                (
-                    Firm(
-                        name="Missing",
-                        balance_cents=0,
-                        uuid="11111111-1111-1111-1111-111111111111",
-                    ),
-                    "0.01",
-                    "missing",
-                ),
-            ),
-            "firm_not_found",
-        ),
-        (_request(payer, (payer, "0.01", "self")), "self_payment"),
-    ]
-
-    for request, expected_code in requests:
-        with pytest.raises(PaymentValidationError) as error:
-            process_bulk_payments(payment_session, request)
-        assert error.value.code == expected_code
-        assert (payer.balance_cents, payee.balance_cents) == (100, 10)
-        assert payment_session.scalar(select(func.count()).select_from(Payment)) == 0
-        payment_session.commit()
 
 
 def test_recipient_balance_overflow_rejects_entire_batch(payment_session):

@@ -3,7 +3,6 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.orm import Session
 
 from taxdome.config import Settings
 from taxdome.db import Base
@@ -58,19 +57,3 @@ def test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
             connection.execute(text("SET search_path TO public"))
             connection.execute(text(f'DROP SCHEMA "{schema_name}" CASCADE'))
             connection.commit()
-
-
-@pytest.fixture
-def task2_session(test_schema) -> Iterator[Session]:
-    """Give each test a rollback-only transaction in its own schema."""
-    engine, schema_name = test_schema
-    with engine.connect() as connection:
-        connection.execute(text(f'SET search_path TO "{schema_name}"'))
-        connection.commit()
-        transaction = connection.begin()
-        session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        try:
-            yield session
-        finally:
-            session.close()
-            transaction.rollback()
