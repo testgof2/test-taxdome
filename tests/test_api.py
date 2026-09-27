@@ -66,13 +66,21 @@ def test_sample_request_returns_created_payments_and_updates_balances(api_contex
         json={
             "payer_firm_uuid": PINECREST,
             "payments": [
-                {"payee_firm_uuid": NAIR, "amount": "6250", "description": "Annual accounts"},
+                {
+                    "payee_firm_uuid": NAIR,
+                    "amount": "6250",
+                    "description": "Overflow returns, August 2026",
+                },
                 {
                     "payee_firm_uuid": NAIR,
                     "amount": "5800.5",
-                    "description": "Quarterly bookkeeping",
+                    "description": "Amended returns, August 2026",
                 },
-                {"payee_firm_uuid": LOPEZ, "amount": "1200.75", "description": "Tax return"},
+                {
+                    "payee_firm_uuid": LOPEZ,
+                    "amount": "1200.75",
+                    "description": "Bookkeeping cleanup, 3 clients",
+                },
             ],
         },
     )
