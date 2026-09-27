@@ -1,10 +1,10 @@
 # Firm Payments API
 
-A small FastAPI service that transfers a firm's balance to several other firms in one request. It validates the whole batch before writing: a successful request records every payment, updates the balances, and returns `201`; an unaffordable batch returns `422` and changes nothing.
+One request pays several firms. The service checks that the payer can afford the full batch, then records every payment and updates the balances in one transaction. If the payer cannot cover it, the API returns `422` and changes nothing.
 
 ## Run locally
 
-Use Python 3.12 or 3.13 and Docker. From the repository root, run:
+With Python 3.12 or 3.13 and Docker, run:
 
 ```powershell
 python -m venv .venv
@@ -17,9 +17,7 @@ python -m taxdome.seed
 uvicorn taxdome.main:app --reload
 ```
 
-The API runs at `http://127.0.0.1:8000`; interactive schemas are at `/docs`. PostgreSQL is exposed only at `127.0.0.1:55432`. The Compose volume retains local data. Run migrations explicitly after schema changes; neither app startup nor pytest runs Alembic. Seeding again inserts only missing sample firms and leaves existing balances alone.
-
-`DATABASE_URL` selects the application database. `TEST_DATABASE_URL` must select a different database; `.env.example` supplies local defaults. The Compose initialization creates both databases on a new volume. If the volume already existed before the test database was added, create `taxdome_test` manually or use a fresh local volume.
+The API runs at `http://127.0.0.1:8000`, with interactive docs at `/docs`. `.env.example` sets separate development and test database URLs. Run migrations explicitly; startup and pytest never run Alembic. The seed command is safe to repeat: it leaves existing firms and balances alone. On an older Compose volume, you may need to create `taxdome_test` yourself.
 
 ## Try the sample payment
 
@@ -39,20 +37,24 @@ $body = @'
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/bulk-payments -ContentType application/json -Body $body
 ```
 
-The response is `201 Created` with the payer UUID and three payment objects. Each object contains a generated integer `id`, the payee UUID, its description, and a two-decimal amount (`6250.00`, `5800.50`, or `1200.75`). On a fresh database, the resulting balances are Pinecrest `$36,748.75`, Lopez `$1,700.75`, and Nair `$14,050.50`. Sending the request again makes another payment batch, so use a fresh database when checking those balances.
+The response is `201 Created` with three payment IDs. On a fresh database, Pinecrest finishes with `$36,748.75`, Lopez with `$1,700.75`, and Nair with `$14,050.50`. Each submission creates a new batch, so start fresh when checking those balances.
 
-Run the test suite with `pytest`. It uses PostgreSQL and creates isolated schemas in `taxdome_test`; the end-to-end test also creates and drops a temporary database. The test database role needs `CREATEDB` permission. Tests do not modify the development database. The focused tests cover exact cent parsing, atomic transfers and rollback, the HTTP contract, and concurrent requests. To stop PostgreSQL without deleting data, run `docker compose down`. `docker compose down -v` permanently removes the local volume.
+Run `pytest` to check the API, balances, rollback, and concurrent transfers. Tests use `taxdome_test`, never the development database. The end-to-end test creates a temporary database, so the test role needs `CREATEDB`. `docker compose down` stops PostgreSQL without deleting its data.
 
-## Design and review notes
+## Approach and trade-offs
 
-- SQLAlchemy stores amounts and balances as integer cents. Request amounts must be positive decimal **strings** that represent exact cents. Extra trailing zeros are allowed (`"1.2300"`); fractional cents are rejected (`"1.235"`). The service never rounds money.
-- One SQLAlchemy transaction locks every participating firm in ascending database ID order. It checks the payer's current balance, validates recipients and integer ranges, then writes all balances and payment rows together. The database locks coordinate requests across server instances and avoid opposing-transfer deadlocks.
-- Firm UUID lookup and database uniqueness are case-insensitive. Existing firms whose UUIDs differ only by case must be reconciled before applying migration `0002`. Duplicate recipients are allowed and receive a combined credit, with one payment row per request entry. Empty batches, unknown firms, self-payments, invalid amounts, and insufficient funds return `422` with a typed `detail` list containing `code`, `message`, and `field`.
-- Concurrency tests needed reliable overlap: each worker uses its own PostgreSQL connection and waits behind a held row lock before both requests proceed. Test data lives in isolated schemas in the separate test database.
-- The assignment's sample payload uses multiple payments to Nair. This is why the service sums recipient credits but still records each payment separately.
-- This version has no authentication or idempotency key. Identical submissions create separate payments. For a production service, add authorization and an idempotency key so clients can safely retry after a lost response.
+Amounts are positive decimal strings stored as integer cents. `"1.2300"` is valid; `"1.235"` is rejected rather than rounded. The service locks participating firms in ID order and commits the whole batch at once. Repeated recipients get a combined credit but still have separate payment records. Invalid requests and business-rule failures return a typed `422` response.
 
-The implementation was developed with Codex for planning, coding, test review, and documentation. [AI_DIALOGUE.docx](AI_DIALOGUE.docx) contains the verbatim user-visible dialogue exported from this task, with timestamps and message roles. Refresh it before submission if the conversation continues. The repository history shows the implementation sequence.
+Concurrency was the main tricky part. The tests force requests to overlap on real PostgreSQL row locks. UUIDs are stored as text, so lookup and uniqueness are case-insensitive; any existing firms whose UUIDs differ only by case need to be reconciled before migration `0002`.
+
+## What I would improve next
+
+- Add an idempotency key so a client can safely retry after losing a response. Today, a retry pays again.
+- Check that the caller is allowed to spend from the payer firm.
+- Limit batch size so one request cannot hold firm locks for too long.
+- If every firm writer guarantees canonical UUIDs, simplify the case-insensitive UUID handling.
+
+I used Codex for planning, coding, review, and documentation. The [Word dialogue export](AI_DIALOGUE.docx) contains the unedited user-visible messages; refresh it if this conversation continues. The commit history shows the implementation sequence.
 
 ## Assignment questions
 
