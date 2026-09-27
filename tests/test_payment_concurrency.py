@@ -5,12 +5,12 @@ from queue import Queue
 from threading import Barrier
 from time import monotonic, sleep
 
-from sqlalchemy import func, select, text
+from sqlalchemy import Connection, Engine, func, select, text
 from sqlalchemy.orm import Session
 
 from taxdome.models import Firm, Payment
 from taxdome.payments import PaymentValidationError, process_bulk_payments
-from taxdome.schemas import BulkPaymentRequest
+from taxdome.schemas import BulkPaymentRequest, BulkPaymentResponse
 
 
 def _firms(session: Session, *balances: int) -> list[Firm]:
@@ -38,7 +38,11 @@ def _request(payer: Firm, payee: Firm, amount: str) -> BulkPaymentRequest:
     )
 
 
-def _run_while_rows_are_contended(test_schema, locked_uuids, requests):
+def _run_while_rows_are_contended(
+    test_schema: tuple[Engine, str],
+    locked_uuids: list[str],
+    requests: list[BulkPaymentRequest],
+) -> list[BulkPaymentResponse | PaymentValidationError]:
     """Start independent DB sessions behind a lock, then release them together."""
     engine, schema_name = test_schema
     blocker = engine.connect()
@@ -55,7 +59,7 @@ def _run_while_rows_are_contended(test_schema, locked_uuids, requests):
     barrier = Barrier(len(requests) + 1)
     pids: Queue[int] = Queue()
 
-    def run(request):
+    def run(request: BulkPaymentRequest) -> BulkPaymentResponse | PaymentValidationError:
         connection = engine.connect()
         try:
             connection.execute(text(f'SET search_path TO "{schema_name}"'))
@@ -99,7 +103,7 @@ def _run_while_rows_are_contended(test_schema, locked_uuids, requests):
         pool.shutdown(wait=True, cancel_futures=True)
 
 
-def _balances(engine, schema_name):
+def _balances(engine: Engine, schema_name: str) -> tuple[dict[str, int], int, int]:
     connection = engine.connect()
     try:
         connection.execute(text(f'SET search_path TO "{schema_name}"'))
@@ -113,14 +117,12 @@ def _balances(engine, schema_name):
         connection.close()
 
 
-def test_concurrent_batches_cannot_overspend_one_payer(test_schema):
+def test_concurrent_batches_cannot_overspend_one_payer(
+    test_schema: tuple[Engine, str], test_connection: Connection
+) -> None:
     engine, schema_name = test_schema
-    connection = engine.connect()
-    connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    connection.commit()
-    with Session(bind=connection, expire_on_commit=False) as session:
+    with Session(bind=test_connection, expire_on_commit=False) as session:
         payer, recipient_a, recipient_b = _firms(session, 100, 0, 0)
-    connection.close()
 
     results = _run_while_rows_are_contended(
         test_schema,
@@ -137,14 +139,12 @@ def test_concurrent_batches_cannot_overspend_one_payer(test_schema):
     assert total == 100
 
 
-def test_concurrent_payments_to_shared_recipient_both_credit(test_schema):
+def test_concurrent_payments_to_shared_recipient_both_credit(
+    test_schema: tuple[Engine, str], test_connection: Connection
+) -> None:
     engine, schema_name = test_schema
-    connection = engine.connect()
-    connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    connection.commit()
-    with Session(bind=connection, expire_on_commit=False) as session:
+    with Session(bind=test_connection, expire_on_commit=False) as session:
         payer_a, payer_b, recipient = _firms(session, 100, 100, 0)
-    connection.close()
 
     results = _run_while_rows_are_contended(
         test_schema,
@@ -159,14 +159,12 @@ def test_concurrent_payments_to_shared_recipient_both_credit(test_schema):
     assert total == 200
 
 
-def test_opposing_concurrent_transfers_finish_without_deadlock(test_schema):
+def test_opposing_concurrent_transfers_finish_without_deadlock(
+    test_schema: tuple[Engine, str], test_connection: Connection
+) -> None:
     engine, schema_name = test_schema
-    connection = engine.connect()
-    connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    connection.commit()
-    with Session(bind=connection, expire_on_commit=False) as session:
+    with Session(bind=test_connection, expire_on_commit=False) as session:
         firm_a, firm_b = _firms(session, 100, 100)
-    connection.close()
 
     results = _run_while_rows_are_contended(
         test_schema,

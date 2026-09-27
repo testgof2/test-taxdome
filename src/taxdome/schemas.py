@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 _PLAIN_DECIMAL = re.compile(r"(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)\Z")
-MAX_PAYMENT_CENTS = 2_147_483_647
+MAX_BALANCE_CENTS = 2_147_483_647
 
 
 def amount_to_cents(amount: str) -> int:
@@ -29,14 +29,14 @@ def amount_to_cents(amount: str) -> int:
     cents, remainder = divmod(numerator * 100, denominator)
     if remainder:
         raise ValueError("amount must be an exact number of cents")
-    if cents < 1 or cents > MAX_PAYMENT_CENTS:
+    if cents < 1 or cents > MAX_BALANCE_CENTS:
         raise ValueError("amount is outside the supported cents range")
     return cents
 
 
 def cents_to_amount(cents: int) -> str:
     """Format a positive integer-cent payment as a two-decimal amount."""
-    if type(cents) is not int or not 1 <= cents <= MAX_PAYMENT_CENTS:
+    if type(cents) is not int or not 1 <= cents <= MAX_BALANCE_CENTS:
         raise ValueError("cents is outside the supported range")
     return f"{cents // 100}.{cents % 100:02d}"
 

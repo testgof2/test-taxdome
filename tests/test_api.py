@@ -1,7 +1,8 @@
 from collections.abc import Iterator
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import Connection, func, select
 from sqlalchemy.orm import Session
 
 from taxdome.main import app, get_session
@@ -13,11 +14,8 @@ NAIR = "e5f18b3c-2a9d-4c07-8e6b-1d4a7f9c3b25"
 
 
 @pytest.fixture
-def api_context(test_schema) -> Iterator[tuple[TestClient, Session]]:
-    engine, schema_name = test_schema
-    connection = engine.connect()
-    connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    connection.commit()
+def api_context(test_connection: Connection) -> Iterator[tuple[TestClient, Session]]:
+    connection = test_connection
     transaction = connection.begin()
     inspection_session = Session(
         bind=connection, join_transaction_mode="create_savepoint", expire_on_commit=False
@@ -43,7 +41,6 @@ def api_context(test_schema) -> Iterator[tuple[TestClient, Session]]:
         app.dependency_overrides.pop(get_session, None)
         inspection_session.close()
         transaction.rollback()
-        connection.close()
 
 
 def _create_api_test_firms(session: Session) -> None:

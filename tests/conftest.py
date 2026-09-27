@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, text
 
 from taxdome.config import Settings
 from taxdome.db import Base
@@ -32,7 +32,7 @@ def database_engines(settings: Settings) -> Iterator[tuple[Engine, Engine]]:
 
 
 @pytest.fixture
-def test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
+def test_schema(database_engines: tuple[Engine, Engine]) -> Iterator[tuple[Engine, str]]:
     """Create model tables in an isolated temporary test schema."""
     dev_engine, test_engine = database_engines
     if dev_engine.url.database == test_engine.url.database:
@@ -57,3 +57,12 @@ def test_schema(database_engines) -> Iterator[tuple[Engine, str]]:
             connection.execute(text("SET search_path TO public"))
             connection.execute(text(f'DROP SCHEMA "{schema_name}" CASCADE'))
             connection.commit()
+
+
+@pytest.fixture
+def test_connection(test_schema: tuple[Engine, str]) -> Iterator[Connection]:
+    engine, schema_name = test_schema
+    with engine.connect() as connection:
+        connection.execute(text(f'SET search_path TO "{schema_name}"'))
+        connection.commit()
+        yield connection

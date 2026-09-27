@@ -1,5 +1,7 @@
+from collections.abc import Iterator
+
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import Connection, Engine, func, select, text
 from sqlalchemy.orm import Session
 
 from taxdome.models import Firm, Payment
@@ -8,20 +10,12 @@ from taxdome.schemas import BulkPaymentRequest
 
 
 @pytest.fixture
-def payment_session(test_schema):
-    engine, schema_name = test_schema
-    connection = engine.connect()
-    connection.execute(text(f'SET search_path TO "{schema_name}"'))
-    connection.commit()
-    session = Session(bind=connection, expire_on_commit=False)
-    try:
+def payment_session(test_connection: Connection) -> Iterator[Session]:
+    with Session(bind=test_connection, expire_on_commit=False) as session:
         yield session
-    finally:
-        session.close()
-        connection.close()
 
 
-def _add_firms(session: Session, *records: tuple[int, str]):
+def _add_firms(session: Session, *records: tuple[int, str]) -> list[Firm]:
     firms = [
         Firm(
             name=label,
@@ -76,7 +70,9 @@ def test_stored_uppercase_firm_uuids_can_be_paid(payment_session):
     assert payment_session.scalar(select(func.count()).select_from(Payment)) == 1
 
 
-def test_locked_firm_refreshes_balance_already_loaded_in_session(payment_session, test_schema):
+def test_locked_firm_refreshes_balance_already_loaded_in_session(
+    payment_session: Session, test_schema: tuple[Engine, str]
+) -> None:
     payer, first_payee, second_payee = _add_firms(
         payment_session, (100, "payer"), (0, "first payee"), (0, "second payee")
     )
