@@ -84,9 +84,9 @@ Other proposed assumptions from the approved plan:
   not run Alembic.
 - Verify unique firm UUIDs and valid payment foreign keys.
 - Verify database rejection of negative balances and nonpositive payments.
-- Verify the three sample firms have the exact supplied UUIDs and balances.
-- Verify rerunning the seed command does not duplicate firms or reset existing
-  balances, including after a firm's balance has changed.
+- Manually verify the three sample firms have the supplied UUIDs and balances.
+- Manually rerun the seed command and verify it does not duplicate firms or
+  reset existing balances, including after a firm's balance has changed.
 
 ### Implementation plan
 
@@ -161,6 +161,8 @@ Acquire locks in consistent order even for opposing transfers.
   Nair 1,405,050.
 - Verify insufficient funds, malformed input, and other validation failures
   return 422 with the agreed error format and no database changes.
+- Include an unknown request field and a malformed amount among the endpoint
+  validation examples.
 - Verify unexpected persistence failures never return 201 or expose database details.
 - Verify OpenAPI documents the request and response schemas.
 

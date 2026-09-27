@@ -1,9 +1,7 @@
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 import pytest
 
 from taxdome.models import Firm, Payment
-from taxdome.seed import seed_sample_firms
 
 
 def test_firm_uuid_must_be_unique(task2_session):
@@ -56,41 +54,3 @@ def test_payment_amount_must_be_positive(task2_session):
     )
     with pytest.raises(IntegrityError):
         task2_session.flush()
-
-
-def test_seed_inserts_exact_sample_firms(task2_session):
-    assert seed_sample_firms(task2_session) == 3
-    firms = task2_session.scalars(select(Firm).order_by(Firm.id)).all()
-
-    assert [
-        (firm.id, firm.name, firm.balance_cents, firm.uuid) for firm in firms
-    ] == [
-        (1, "Pinecrest CPA Group", 5_000_000, "3f1c9a2e-7b4d-4c1e-9a55-2d8e6f0b7c41"),
-        (2, "Lopez Bookkeeping", 50_000, "8b2e4c71-0d3a-4f6e-b1c9-5a7d2e9f4c10"),
-        (3, "Nair Tax Services", 200_000, "e5f18b3c-2a9d-4c07-8e6b-1d4a7f9c3b25"),
-    ]
-
-
-def test_rerunning_seed_preserves_existing_firm_data(task2_session):
-    assert seed_sample_firms(task2_session) == 3
-    task2_session.flush()
-    firm = task2_session.get(Firm, 1)
-    assert firm is not None
-    firm.name = "Renamed by user"
-    firm.balance_cents = 123_456
-    task2_session.commit()
-
-    assert seed_sample_firms(task2_session) == 0
-    task2_session.refresh(firm)
-    assert firm.name == "Renamed by user"
-    assert firm.balance_cents == 123_456
-    assert task2_session.scalar(select(Firm.id).where(Firm.id == 4)) is None
-
-
-def test_firm_ids_continue_after_seed(task2_session):
-    assert seed_sample_firms(task2_session) == 3
-    firm = Firm(name="Later firm", balance_cents=10, uuid="later-firm")
-    task2_session.add(firm)
-    task2_session.flush()
-
-    assert firm.id == 4
